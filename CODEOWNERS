@@ -1,0 +1,22 @@
+# CODEOWNERS for prometheus-dev-environment
+# This file defines who is responsible for code reviews
+# All PRs will automatically request review from these owners
+
+# Global owner for all files
+* @Avilir
+
+# Specific ownership for critical files
+/prometheus/ @Avilir
+/auth/ @Avilir
+/scripts/ @Avilir
+*.yml @Avilir
+*.yaml @Avilir
+
+# Documentation
+*.md @Avilir
+/docs/ @Avilir
+
+# Security-sensitive files
+SECURITY.md @Avilir
+/configs/ @Avilir
+.gitignore @Avilir
