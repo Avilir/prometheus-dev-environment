@@ -1,0 +1,142 @@
+# Advanced PromQL Queries for Prometheus Development Environment
+# Author: Avi Layani
+# Purpose: Complex queries for analysis and alerting
+
+# ===========================================
+# Rate of Change Calculations
+# ===========================================
+
+# CPU usage rate of change (detect sudden spikes)
+deriv(100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)[10m:30s])
+
+# Memory growth rate (MB per hour)
+deriv(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes[1h]) * 3600 / 1024 / 1024
+
+# Disk fill rate (GB per day)
+predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[1h], 24*3600) / 1024 / 1024 / 1024
+
+# ===========================================
+# Predictive Queries
+# ===========================================
+
+# Predict when disk will be full (hours from now)
+(node_filesystem_avail_bytes{mountpoint="/"} / 
+  (-1 * deriv(node_filesystem_avail_bytes{mountpoint="/"}[1h]))) / 3600
+
+# Predict memory usage in 1 hour
+predict_linear(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes[30m], 3600)
+
+# ===========================================
+# Anomaly Detection
+# ===========================================
+
+# CPU usage anomaly (deviation from average)
+abs((100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) - 
+  avg_over_time((100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100))[1h:5m])) > 20
+
+# Network traffic anomaly (3x standard deviation)
+rate(node_network_receive_bytes_total[5m]) > 
+  (avg_over_time(rate(node_network_receive_bytes_total[5m])[1h:5m]) + 
+   3 * stddev_over_time(rate(node_network_receive_bytes_total[5m])[1h:5m]))
+
+# ===========================================
+# Correlation Queries
+# ===========================================
+
+# Correlate CPU usage with load average
+(100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) / node_load1
+
+# Memory pressure indicator (high usage + high swap activity)
+((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80) and 
+(rate(node_memory_SwapIn_bytes[5m]) > 0)
+
+# ===========================================
+# Service Level Indicators (SLIs)
+# ===========================================
+
+# Availability (percentage of time service is up in last hour)
+avg_over_time(up[1h]) * 100
+
+# Error rate (if we had application metrics)
+# rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100
+
+# 99th percentile response time over time
+# quantile_over_time(0.99, http_request_duration_seconds[1h])
+
+# ===========================================
+# Resource Saturation Indicators
+# ===========================================
+
+# CPU saturation (high usage + high load)
+(100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80) and (node_load1 > 4)
+
+# Memory saturation (low available memory + swap usage)
+(node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1) and 
+(rate(node_memory_SwapIn_bytes[5m]) > 0)
+
+# Disk I/O saturation (high utilization)
+rate(node_disk_io_time_seconds_total[5m]) > 0.9
+
+# ===========================================
+# Comparative Analysis
+# ===========================================
+
+# Compare current CPU usage to same time yesterday
+(100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) - 
+(100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m] offset 1d)) * 100))
+
+# Week-over-week memory usage comparison
+((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) - 
+ (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) offset 7d) / 
+ ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) offset 7d) * 100
+
+# ===========================================
+# Capacity Planning
+# ===========================================
+
+# Days until disk full (based on 7-day trend)
+node_filesystem_avail_bytes{mountpoint="/"} / 
+((-1) * deriv(node_filesystem_avail_bytes{mountpoint="/"}[7d])) / 86400
+
+# Memory headroom percentage
+node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100
+
+# CPU headroom (percentage of idle capacity)
+avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100
+
+# ===========================================
+# Complex Aggregations
+# ===========================================
+
+# Total bandwidth usage across all interfaces
+sum(rate(node_network_receive_bytes_total[5m]) + rate(node_network_transmit_bytes_total[5m])) by (instance)
+
+# Filesystem usage summary by instance
+sort_desc(
+  100 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / 
+         node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"} * 100)
+)
+
+# Top memory consumers (if process exporter available)
+topk(10, (process_resident_memory_bytes / 1024 / 1024))
+
+# ===========================================
+# Alert-Worthy Queries
+# ===========================================
+
+# High CPU usage sustained for 5 minutes
+(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 90
+
+# Low disk space (less than 10%)
+(node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+
+# Memory pressure (less than 5% available)
+(node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.05
+
+# Network errors increasing
+rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m]) > 0
+
+# Prometheus itself having issues
+up{job="prometheus"} == 0 or 
+rate(prometheus_rule_evaluation_failures_total[5m]) > 0 or
+rate(prometheus_tsdb_compactions_failed_total[5m]) > 0

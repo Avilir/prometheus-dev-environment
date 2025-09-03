@@ -1,0 +1,152 @@
+# Basic PromQL Queries for Prometheus Development Environment
+# Author: Avi Layani
+# Purpose: Common queries for system monitoring
+
+# ===========================================
+# UP/DOWN Status Queries
+# ===========================================
+
+# Check if all targets are up
+up
+
+# Check specific job status
+up{job="prometheus"}
+up{job="node-exporter"}
+up{job="pcp-host-metrics"}
+
+# Count how many targets are up
+sum(up)
+
+# ===========================================
+# CPU Metrics (Node Exporter)
+# ===========================================
+
+# CPU usage percentage (all cores)
+100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+# CPU usage per core
+100 - (rate(node_cpu_seconds_total{mode="idle"}[5m]) * 100)
+
+# CPU usage by mode
+avg by (mode) (rate(node_cpu_seconds_total[5m])) * 100
+
+# System load averages
+node_load1
+node_load5
+node_load15
+
+# ===========================================
+# Memory Metrics (Node Exporter)
+# ===========================================
+
+# Memory usage percentage
+(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+
+# Memory usage in bytes
+node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+
+# Memory breakdown
+node_memory_MemTotal_bytes
+node_memory_MemFree_bytes
+node_memory_MemAvailable_bytes
+node_memory_Buffers_bytes
+node_memory_Cached_bytes
+
+# Swap usage
+(node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes) / node_memory_SwapTotal_bytes * 100
+
+# ===========================================
+# Disk Metrics (Node Exporter)
+# ===========================================
+
+# Disk usage percentage per mount point
+100 - (node_filesystem_avail_bytes / node_filesystem_size_bytes * 100)
+
+# Disk space available
+node_filesystem_avail_bytes{mountpoint="/"}
+
+# Disk I/O rates
+rate(node_disk_read_bytes_total[5m])
+rate(node_disk_written_bytes_total[5m])
+
+# Disk operations per second
+rate(node_disk_reads_completed_total[5m])
+rate(node_disk_writes_completed_total[5m])
+
+# ===========================================
+# Network Metrics (Node Exporter)
+# ===========================================
+
+# Network receive rate (bytes/sec)
+rate(node_network_receive_bytes_total{device!="lo"}[5m])
+
+# Network transmit rate (bytes/sec)
+rate(node_network_transmit_bytes_total{device!="lo"}[5m])
+
+# Network errors
+rate(node_network_receive_errs_total[5m])
+rate(node_network_transmit_errs_total[5m])
+
+# Network dropped packets
+rate(node_network_receive_drop_total[5m])
+rate(node_network_transmit_drop_total[5m])
+
+# ===========================================
+# PCP Metrics (when using PCP exporter)
+# ===========================================
+
+# CPU metrics (PCP)
+kernel_all_cpu_user
+kernel_all_cpu_sys
+kernel_all_cpu_idle
+
+# Memory metrics (PCP)
+mem_util_used
+mem_util_available
+mem_util_cached
+
+# Disk metrics (PCP)
+disk_all_read
+disk_all_write
+disk_all_total
+
+# Network metrics (PCP)
+network_interface_in_bytes
+network_interface_out_bytes
+
+# ===========================================
+# Prometheus Self-Monitoring
+# ===========================================
+
+# Samples ingested per second
+rate(prometheus_tsdb_head_samples_appended_total[5m])
+
+# Active time series
+prometheus_tsdb_head_series
+
+# Number of active appenders
+prometheus_tsdb_head_active_appenders
+
+# Storage statistics
+prometheus_tsdb_compaction_duration_seconds
+prometheus_tsdb_wal_segment_current
+prometheus_tsdb_blocks_loaded
+
+# Query performance
+rate(prometheus_engine_query_duration_seconds_sum[5m]) / rate(prometheus_engine_query_duration_seconds_count[5m])
+
+# HTTP API requests
+rate(prometheus_http_requests_total[5m])
+
+# ===========================================
+# Useful Aggregations
+# ===========================================
+
+# Top 5 CPU consuming processes (if process exporter is used)
+topk(5, rate(process_cpu_seconds_total[5m]))
+
+# Average response time over last 5 minutes
+avg_over_time(up[5m])
+
+# 95th percentile of memory usage
+quantile(0.95, node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)

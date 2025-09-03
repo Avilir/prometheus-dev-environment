@@ -1,0 +1,87 @@
+# Alternative compose file using Quay.io registry for Prometheus
+version: '3.8'
+
+services:
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.47.0  # Using Quay.io registry
+    container_name: prometheus-dev
+    hostname: prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:9090:9090"  # Bind to all interfaces for external access
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'  # Keep data for 7 days in dev
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'  # Enable config reload via API
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    mem_limit: 1g
+    cpus: 1.0
+
+  pcp-exporter:
+    image: registry.fedoraproject.org/pcp:latest  # Using PCP from Fedora registry
+    container_name: pcp-exporter
+    hostname: test-host
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:44323:44323"  # PCP pmproxy port (Prometheus exporter)
+    environment:
+      - PCP_HOSTNAME=test-host
+      - PCP_CONTAINER_IMAGE=registry.fedoraproject.org/pcp:latest
+    volumes:
+      - /sys:/sys:ro
+      - /proc:/proc:ro
+      - /etc/hostname:/etc/hostname:ro
+      - ./pcp/config:/etc/pcp:ro  # Optional: custom PCP configuration
+    command: |
+      sh -c "
+        # Start PCP services
+        service pmcd start &&
+        service pmlogger start &&
+        service pmproxy start &&
+        # Wait for services to be ready
+        sleep 5 &&
+        # Enable Prometheus export in pmproxy
+        echo 'prometheus.enabled = true' >> /etc/pcp/pmproxy/pmproxy.conf &&
+        service pmproxy restart &&
+        # Keep container running and show logs
+        tail -f /var/log/pcp/pmcd/pmcd.log /var/log/pcp/pmproxy/pmproxy.log
+      "
+    networks:
+      - monitoring
+    privileged: false  # Explicitly set to false
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "pminfo", "-f", "kernel.all.cpu.user"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    mem_limit: 512m
+    cpus: 0.5
+
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/24
+
+volumes:
+  prometheus-data:
+    labels:
+      project: "prom-dev"
+      component: "prometheus"

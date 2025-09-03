@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+
+# Container data
+prometheus-data/
+pcp-data/
+*.log
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+configs/credentials.env
+auth/.htpasswd
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# Test outputs
+test-results/
+coverage/

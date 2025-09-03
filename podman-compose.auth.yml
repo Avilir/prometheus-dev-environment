@@ -1,0 +1,104 @@
+# Compose file with authentication via Nginx proxy
+version: '3.8'
+
+services:
+  # Nginx authentication proxy
+  nginx-auth:
+    image: docker.io/nginx:alpine
+    container_name: prometheus-auth-proxy
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:9090:80"     # Basic auth + Bearer + API token
+      - "0.0.0.0:9091:81"     # Bearer token only
+      - "0.0.0.0:9092:82"     # API token only
+    volumes:
+      - ./auth/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./auth/.htpasswd:/etc/nginx/.htpasswd:ro
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - node-exporter
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 128m
+    cpus: 0.5
+
+  # Prometheus (not exposed directly)
+  prometheus:
+    image: docker.io/prom/prometheus:v2.47.0
+    container_name: prometheus-dev
+    hostname: prometheus-dev
+    restart: unless-stopped
+    # No external ports - access only through nginx
+    expose:
+      - "9090"
+    volumes:
+      - ./prometheus/prometheus-node-exporter.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    mem_limit: 1g
+    cpus: 1.0
+
+  # Node Exporter (not exposed directly)
+  node-exporter:
+    image: docker.io/prom/node-exporter:v1.7.0
+    container_name: node-exporter
+    hostname: test-host
+    restart: unless-stopped
+    # No external ports - access only through nginx
+    expose:
+      - "9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+      - '--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$'
+    networks:
+      - monitoring
+    privileged: false
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.1
+
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/24
+
+volumes:
+  prometheus-data:
+    labels:
+      project: "prom-dev"
+      component: "prometheus"

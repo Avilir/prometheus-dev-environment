@@ -1,0 +1,42 @@
+global:
+  scrape_interval: 15s          # How frequently to scrape targets
+  evaluation_interval: 15s      # How frequently to evaluate rules
+  external_labels:
+    environment: 'development'
+    project: 'prom-dev'
+
+# Alertmanager configuration (optional for development)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'prometheus-dev'
+
+  # PCP host metrics exporter
+  - job_name: 'pcp-host-metrics'
+    static_configs:
+      - targets: ['pcp-exporter:44323']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'test-host'
+    metric_relabel_configs:
+      # Add any metric relabeling if needed
+      - source_labels: [__name__]
+        regex: '(kernel_all_cpu_.*|mem_.*|disk_.*|network_.*)'
+        action: keep

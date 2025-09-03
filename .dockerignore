@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+.cursor/
+
+# Credentials and secrets
+configs/credentials.env
+auth/.htpasswd
+.env*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# Test outputs
+test-results/
+coverage/
+
+# Logs
+*.log
+
+# Scripts (not needed in containers)
+scripts/
+
+# Version control
+VERSION
+CHANGELOG.md

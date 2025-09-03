@@ -1,0 +1,185 @@
+# Performance Testing PromQL Queries
+# Author: Avi Layani
+# Purpose: Queries designed for pytest-perf-monitor integration testing
+
+# ===========================================
+# Test Execution Metrics
+# ===========================================
+
+# Average CPU usage during a time range (for test correlation)
+avg_over_time(
+  (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))
+  [5m:]  # 5 minute window with default resolution
+)
+
+# Maximum CPU usage during test execution
+max_over_time(
+  (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))
+  [5m:]
+)
+
+# Memory usage during test execution (bytes)
+avg_over_time(
+  (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+  [5m:]
+)
+
+# ===========================================
+# Time-Range Specific Queries
+# ===========================================
+
+# CPU usage between specific timestamps (replace with actual timestamps)
+# avg_over_time(
+#   (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))
+#   [2023-12-01T10:00:00Z..2023-12-01T10:05:00Z]
+# )
+
+# Memory growth during a specific period
+# (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+#   @1701424800  # end timestamp
+# - 
+# (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+#   @1701424500  # start timestamp
+
+# ===========================================
+# Performance Baseline Queries
+# ===========================================
+
+# Baseline CPU (5-minute average before test)
+avg_over_time(
+  (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100))
+  [5m:] offset 10m
+)
+
+# Baseline memory
+avg_over_time(
+  (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+  [5m:] offset 10m
+)
+
+# Baseline network I/O
+avg_over_time(
+  (rate(node_network_receive_bytes_total[1m]) + rate(node_network_transmit_bytes_total[1m]))
+  [5m:] offset 10m
+)
+
+# ===========================================
+# Performance Delta Calculations
+# ===========================================
+
+# CPU usage increase from baseline
+(
+  avg_over_time(
+    (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))
+    [5m:]
+  )
+  -
+  avg_over_time(
+    (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))
+    [5m:] offset 10m
+  )
+)
+
+# Memory increase from baseline (MB)
+(
+  avg_over_time(
+    (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+    [5m:]
+  )
+  -
+  avg_over_time(
+    (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+    [5m:] offset 10m
+  )
+) / 1024 / 1024
+
+# ===========================================
+# Test-Specific Resource Metrics
+# ===========================================
+
+# Disk I/O during tests (read + write bytes/sec)
+avg_over_time(
+  (rate(node_disk_read_bytes_total[30s]) + rate(node_disk_written_bytes_total[30s]))
+  [5m:]
+)
+
+# Network throughput during tests
+avg_over_time(
+  (rate(node_network_receive_bytes_total{device!="lo"}[30s]) + 
+   rate(node_network_transmit_bytes_total{device!="lo"}[30s]))
+  [5m:]
+)
+
+# File descriptor usage
+max_over_time(node_filefd_allocated[5m:])
+
+# Context switches rate
+avg_over_time(rate(node_context_switches_total[30s])[5m:])
+
+# ===========================================
+# Statistical Analysis for Tests
+# ===========================================
+
+# CPU usage statistics over test period
+# - Average
+avg_over_time((100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))[5m:])
+# - Standard deviation
+stddev_over_time((100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))[5m:])
+# - 95th percentile
+quantile_over_time(0.95, (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))[5m:])
+# - 99th percentile
+quantile_over_time(0.99, (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))[5m:])
+
+# ===========================================
+# Resource Utilization Patterns
+# ===========================================
+
+# CPU usage variability (coefficient of variation)
+stddev_over_time((100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))[5m:]) / 
+avg_over_time((100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))[5m:])
+
+# Memory allocation rate (MB/sec)
+deriv(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes[5m]) / 1024 / 1024
+
+# ===========================================
+# Concurrent Load Testing Metrics
+# ===========================================
+
+# Per-CPU core utilization during load test
+100 - (rate(node_cpu_seconds_total{mode="idle"}[1m]) * 100)
+
+# System vs User CPU time ratio
+sum(rate(node_cpu_seconds_total{mode="system"}[1m])) / 
+sum(rate(node_cpu_seconds_total{mode="user"}[1m]))
+
+# I/O wait percentage
+avg(rate(node_cpu_seconds_total{mode="iowait"}[1m])) * 100
+
+# ===========================================
+# Test Environment Health Checks
+# ===========================================
+
+# Check if metrics are fresh (less than 60 seconds old)
+time() - timestamp(up) < 60
+
+# Verify complete metrics availability
+up * 
+(count(node_cpu_seconds_total) > 0) * 
+(count(node_memory_MemTotal_bytes) > 0) * 
+(count(node_filesystem_avail_bytes) > 0)
+
+# ===========================================
+# Example Queries for pytest-perf-monitor
+# ===========================================
+
+# Query template for specific test window (replace START and END with epoch timestamps)
+# avg_over_time(
+#   (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100))
+#   [END-START:30s] @ END
+# )
+
+# Memory usage at specific point in time (replace TIMESTAMP)
+# (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) @ TIMESTAMP
+
+# Rate of change during specific window
+# rate(node_network_receive_bytes_total[5m] @ TIMESTAMP)
